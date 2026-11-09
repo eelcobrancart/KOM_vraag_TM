@@ -72,17 +72,24 @@ Deno.serve(async (req: Request) => {
    await rest('tm_kom_insights?on_conflict=submission','POST', { submission: uuid(data.submission), name: field(data.name,80,'Je naam'), body: field(data.body,6000,'Je inzicht') },'resolution=ignore-duplicates,return=minimal');
    return send(200,{ok:true});
   }
-  const match = path.match(/^\/api\/insights\/(\d+)\/(comments|recognition)$/);
+  const match = path.match(/^\/api\/insights\/(\d+)\/(comments|recognition|reactions)$/);
   if (!match || !Number.isSafeInteger(Number(match[1]))) throw fail(404, 'Deze bewerking bestaat niet.');
   const id = Number(match[1]);
   if (req.method === 'POST' && match[2] === 'comments') {
    await rest('tm_kom_comments?on_conflict=submission','POST',{submission:uuid(data.submission), insight_id:id, name:field(data.name,80,'Je naam'),body:field(data.body,3000,'Je reactie')},'resolution=ignore-duplicates,return=minimal');
    return send(200,{ok:true});
   }
-  if (req.method === 'PUT' && match[2] === 'recognition') {
+  if (req.method === 'PUT' && ['recognition','reactions'].includes(match[2])) {
    if (typeof data.active !== 'boolean') throw fail(400, 'Ongeldige herkenning.');
-   if (data.active) await rest('tm_kom_recognitions?on_conflict=insight_id,browser_hash','POST',{insight_id:id,browser_hash:browserHash},'resolution=ignore-duplicates,return=minimal');
-   else await rest(`tm_kom_recognitions?insight_id=eq.${id}&browser_hash=eq.${browserHash}`,'DELETE');
+   const kind = match[2] === 'recognition' ? 'recognize' : data.kind;
+   if (!['recognize','checked','sad','happy'].includes(kind)) throw fail(400, 'Kies een geldige reactie.');
+   if (kind === 'recognize') {
+    if (data.active) await rest('tm_kom_recognitions?on_conflict=insight_id,browser_hash','POST',{insight_id:id,browser_hash:browserHash},'resolution=ignore-duplicates,return=minimal');
+    else await rest(`tm_kom_recognitions?insight_id=eq.${id}&browser_hash=eq.${browserHash}`,'DELETE');
+   } else {
+    if (data.active) await rest('tm_kom_emotions?on_conflict=insight_id,browser_hash,kind','POST',{insight_id:id,browser_hash:browserHash,kind},'resolution=ignore-duplicates,return=minimal');
+    else await rest(`tm_kom_emotions?insight_id=eq.${id}&browser_hash=eq.${browserHash}&kind=eq.${kind}`,'DELETE');
+   }
    return send(200,{ok:true});
   }
   throw fail(405, 'Deze bewerking is niet toegestaan.');

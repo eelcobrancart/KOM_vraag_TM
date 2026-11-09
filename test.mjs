@@ -39,8 +39,23 @@ test('gedeelde route, validatie, toegangsregels en persistentie na serverherstar
  assert.equal((await call(`/api/insights/${id}`,{method:'DELETE'})).status,405);
  assert.equal((await call(`/api/insights/${id}`,{method:'PUT',data:{body:'gewijzigd'}})).status,404);
  assert.equal((await call('/api/insights/999999/comments',{method:'POST',data:comment})).status,404);
+ // Each emoji is independently idempotent, browser-scoped, and retractable.
+ for(const kind of ['recognize','checked','sad','happy']){
+  for(let repeat=0;repeat<2;repeat++)assert.equal((await call(`/api/insights/${id}/reactions`,{who:'B',method:'PUT',data:{kind,active:true}})).status,200);
+ }
+ let reactionSnapshot=(await call('/api/insights',{who:'B'})).data.insights[0];
+ assert.equal(reactionSnapshot.reactions.recognize.count,2); // A's existing thumb survives.
+ for(const kind of ['checked','sad','happy']){assert.equal(reactionSnapshot.reactions[kind].count,1);assert.equal(reactionSnapshot.reactions[kind].active,true);}
+ assert.equal((await call('/api/insights',{who:'A'})).data.insights[0].reactions.happy.active,false);
+ await call(`/api/insights/${id}/reactions`,{who:'B',method:'PUT',data:{kind:'sad',active:false}});
+ await call(`/api/insights/${id}/reactions`,{who:'B',method:'PUT',data:{kind:'recognize',active:false}});
+ reactionSnapshot=(await call('/api/insights',{who:'B'})).data.insights[0];
+ assert.equal(reactionSnapshot.reactions.sad.count,0);assert.equal(reactionSnapshot.reactions.happy.count,1);assert.equal(reactionSnapshot.recognitions,1);
+ assert.equal((await call(`/api/insights/${id}/reactions`,{method:'PUT',data:{kind:'invalid',active:true}})).status,400);
+ assert.equal((await call(`/api/insights/${id}/reactions`,{method:'PUT',data:{kind:'happy',active:'true'}})).status,400);
+ const logo=await fetch(origin+'/tm-logo.svg');assert.equal(logo.status,200);assert.match(logo.headers.get('content-type'),/image\/svg/);
  const page=await fetch(origin);assert.match(page.headers.get('content-security-policy'),/script-src 'self'/);assert.match(await page.text(),/lang="nl"/);
  await stop();origin=await start();shared=(await call('/api/insights')).data;
- assert.equal(shared.insights.length,1);assert.equal(shared.comments.length,1);assert.equal(shared.insights[0].recognitions,1);assert.equal(shared.insights[0].recognized,1);
+ assert.equal(shared.insights.length,1);assert.equal(shared.comments.length,1);assert.equal(shared.insights[0].recognitions,1);assert.equal(shared.insights[0].recognized,1);assert.equal(shared.insights[0].reactions.happy.count,1);assert.equal(shared.insights[0].reactions.sad.count,0);
  }finally{if(child?.exitCode===null)await stop();await rm(data,{recursive:true,force:true});}
 });

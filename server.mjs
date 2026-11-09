@@ -11,7 +11,8 @@ mkdirSync(dirname(dbPath),{recursive:true});
 const db=new DatabaseSync(dbPath);
 db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
 db.exec(readFileSync(resolve(root,'migrations/001-init.sql'),'utf8'));
-const files=new Map([['/',['index.html','text/html; charset=utf-8']],['/app.js',['app.js','text/javascript; charset=utf-8']],['/config.js',['config.js','text/javascript; charset=utf-8']],['/style.css',['style.css','text/css; charset=utf-8']]]);
+db.exec(readFileSync(resolve(root,'migrations/002-emotions.sql'),'utf8'));
+const files=new Map([['/tm-logo.svg',['tm-logo.svg','image/svg+xml']],['/',['index.html','text/html; charset=utf-8']],['/app.js',['app.js','text/javascript; charset=utf-8']],['/config.js',['config.js','text/javascript; charset=utf-8']],['/style.css',['style.css','text/css; charset=utf-8']]]);
 const rates=new Map();
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const field=(value,max,label)=>{if(typeof value!=='string'||!value.trim()||value.trim().length>max)throw fail(400,`${label} is verplicht en mag maximaal ${max} tekens bevatten.`);return value.trim();};
@@ -30,7 +31,12 @@ export const server=http.createServer(async(req,res)=>{
  if(!browser){browser=randomBytes(32).toString('hex');res.setHeader('Set-Cookie',`tm_browser=${browser}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${process.env.COOKIE_SECURE==='true'?'; Secure':''}`);}
  const browserHash=createHash('sha256').update(browser).digest('hex');
  if(req.method==='GET'&&url.pathname==='/api/insights'){
- const insights=db.prepare(`SELECT i.*, (SELECT count(*) FROM recognitions r WHERE r.insight_id=i.id) AS recognitions, EXISTS(SELECT 1 FROM recognitions r WHERE r.insight_id=i.id AND r.browser=?) AS recognized FROM insights i ORDER BY i.created_at DESC,i.id DESC`).all(browserHash).map(({submission,...row})=>row);
+ let insights=db.prepare(`SELECT i.*, (SELECT count(*) FROM recognitions r WHERE r.insight_id=i.id) AS recognitions, EXISTS(SELECT 1 FROM recognitions r WHERE r.insight_id=i.id AND r.browser=?) AS recognized FROM insights i ORDER BY i.created_at DESC,i.id DESC`).all(browserHash).map(({submission,...row})=>row);
+ const emotionRows=db.prepare('SELECT insight_id,kind,count(*) AS count,max(CASE WHEN browser=? THEN 1 ELSE 0 END) AS active FROM emotions GROUP BY insight_id,kind').all(browserHash);
+ insights=insights.map(item=>({...item,reactions:Object.fromEntries(['recognize','checked','sad','happy'].map(kind=>{
+  const row=emotionRows.find(x=>x.insight_id===item.id&&x.kind===kind);
+  return [kind,kind==='recognize'?{count:item.recognitions,active:Boolean(item.recognized)}:{count:row?.count||0,active:Boolean(row?.active)}];
+ }))}));
  const comments=db.prepare('SELECT id,insight_id,name,body,created_at FROM comments ORDER BY created_at,id').all();
  return send(res,200,{insights,comments});
  }
@@ -47,15 +53,21 @@ export const server=http.createServer(async(req,res)=>{
  db.prepare('INSERT INTO insights(submission,name,body) VALUES(?,?,?) ON CONFLICT(submission) DO NOTHING').run(submission,name,body);
  return send(res,200,{ok:true});
  }
- const match=url.pathname.match(/^\/api\/insights\/(\d+)\/(comments|recognition)$/);
+ const match=url.pathname.match(/^\/api\/insights\/(\d+)\/(comments|recognition|reactions)$/);
  if(!match)throw fail(404,'Deze bewerking bestaat niet.');
  const parent=id(match[1]);if(!db.prepare('SELECT id FROM insights WHERE id=?').get(parent))throw fail(404,'Dit inzicht is niet gevonden.');
  if(req.method==='POST'&&match[2]==='comments'){
  db.prepare('INSERT INTO comments(submission,insight_id,name,body) VALUES(?,?,?,?) ON CONFLICT(submission) DO NOTHING').run(uuid(data.submission),parent,field(data.name,80,'Je naam'),field(data.body,3000,'Je reactie'));return send(res,200,{ok:true});
  }
- if(req.method==='PUT'&&match[2]==='recognition'){
+ if(req.method==='PUT'&&['recognition','reactions'].includes(match[2])){
  if(typeof data.active!=='boolean')throw fail(400,'Ongeldige herkenning.');
- if(data.active)db.prepare('INSERT OR IGNORE INTO recognitions(insight_id,browser) VALUES(?,?)').run(parent,browserHash);else db.prepare('DELETE FROM recognitions WHERE insight_id=? AND browser=?').run(parent,browserHash);
+ const kind=match[2]==='recognition'?'recognize':data.kind;
+ if(!['recognize','checked','sad','happy'].includes(kind))throw fail(400,'Kies een geldige reactie.');
+ if(kind==='recognize'){
+  if(data.active)db.prepare('INSERT OR IGNORE INTO recognitions(insight_id,browser) VALUES(?,?)').run(parent,browserHash);else db.prepare('DELETE FROM recognitions WHERE insight_id=? AND browser=?').run(parent,browserHash);
+ }else{
+  if(data.active)db.prepare('INSERT OR IGNORE INTO emotions(insight_id,browser,kind) VALUES(?,?,?)').run(parent,browserHash,kind);else db.prepare('DELETE FROM emotions WHERE insight_id=? AND browser=? AND kind=?').run(parent,browserHash,kind);
+ }
  return send(res,200,{ok:true});
  }
  throw fail(405,'Deze bewerking is niet toegestaan.');

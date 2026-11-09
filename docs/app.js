@@ -8,8 +8,10 @@ function browserToken(){
 const browserId=apiBase?browserToken():null;
 const store={get(){try{return localStorage.getItem('tm-name')||'';}catch{return '';}},set(v){try{localStorage.setItem('tm-name',v);}catch{}}};
 $('#name').value=store.get();
-let state={insights:[],comments:[]}, loaded=false, fetching=false;
+let state={insights:[],comments:[]}, loaded=false, fetching=null;
 const cards=new Map(),busyRecognitions=new Set();
+const reactionLabels={recognize:'Dit herken ik',checked:'Mee eens',sad:'Jammer',happy:'Mooi'};
+function reaction(item,kind){return item.reactions?.[kind]||(kind==='recognize'?{count:item.recognitions,active:Boolean(item.recognized)}:{count:0,active:false});}
 function submissionId(){return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(Number(c)^crypto.getRandomValues(new Uint8Array(1))[0]&15>>Number(c)/4).toString(16));}
 const stamp=new Intl.DateTimeFormat('nl-NL',{dateStyle:'long',timeStyle:'short',timeZone:'Europe/Amsterdam'});
 function status(node,text,error=false){node.textContent=text;node.classList.toggle('error',error);}
@@ -25,10 +27,11 @@ function makeCard(item){
  const card=$('#answer-template').content.firstElementChild.cloneNode(true),form=$('.reply-form',card),toggle=$('.reply-toggle',card);
  card.id=`insight-${item.id}`;form.id=`reply-${item.id}`;toggle.setAttribute('aria-controls',form.id);toggle.setAttribute('aria-expanded','false');$('[name=name]',form).value=store.get();
  toggle.addEventListener('click',()=>{form.hidden=!form.hidden;toggle.setAttribute('aria-expanded',String(!form.hidden));if(!form.hidden)$('[name=body]',form).focus();});
- $('.recognize',card).addEventListener('click',async()=>{
- if(busyRecognitions.has(item.id))return;busyRecognitions.add(item.id);const button=$('.recognize',card);button.disabled=true;
- const current=state.insights.find(x=>x.id===item.id),active=!current.recognized;
- try{await api(`/api/insights/${item.id}/recognition`,'PUT',{active});status($('.recognize-status',card),active?'Je herkenning is toegevoegd.':'Je herkenning is ingetrokken.');await refresh();}catch(error){status($('.recognize-status',card),error.message,true);}finally{busyRecognitions.delete(item.id);button.disabled=false;}
+ for(const button of card.querySelectorAll('.emoji-reaction'))button.addEventListener('click',async()=>{
+ const kind=button.dataset.kind,key=`${item.id}:${kind}`;
+ if(busyRecognitions.has(key))return;busyRecognitions.add(key);button.disabled=true;
+ const current=state.insights.find(x=>x.id===item.id),active=!reaction(current,kind).active;
+ try{await api(`/api/insights/${item.id}/reactions`,'PUT',{kind,active});status($('.recognize-status',card),active?`Je reactie ‘${reactionLabels[kind]}’ is toegevoegd.`:`Je reactie ‘${reactionLabels[kind]}’ is ingetrokken.`);await refresh(true);}catch(error){status($('.recognize-status',card),error.message,true);}finally{busyRecognitions.delete(key);button.disabled=false;}
  });
  wireForm(form,`/api/insights/${item.id}/comments`,$('.status',form),'Je reactie is geplaatst.');
  return card;
@@ -43,14 +46,23 @@ function render(){
  items.forEach((item,index)=>{
  let card=cards.get(item.id);if(!card){card=makeCard(item);cards.set(item.id,card);}
  author(card,item);$('.answer-body',card).textContent=item.body;
- const button=$('.recognize',card);button.setAttribute('aria-pressed',String(Boolean(item.recognized)));button.setAttribute('aria-label',`Dit herken ik: ${item.recognitions} herkenningen. ${item.recognized?'Klik om je herkenning in te trekken.':'Klik om te herkennen.'}`);$('.count',card).textContent=item.recognitions;
+ for(const button of card.querySelectorAll('.emoji-reaction')){
+  const kind=button.dataset.kind,value=reaction(item,kind);
+  button.setAttribute('aria-pressed',String(Boolean(value.active)));
+  button.setAttribute('aria-label',`${reactionLabels[kind]}: ${value.count}. ${value.active?'Klik om jouw reactie in te trekken.':'Klik om te reageren.'}`);
+  $('.count',button).textContent=value.count;
+ }
  const replies=state.comments.filter(x=>x.insight_id===item.id),container=$('.replies',card);
  const signature=JSON.stringify(replies);if(container.dataset.signature!==signature){container.replaceChildren(...replies.map(createReply));container.dataset.signature=signature;}
  $('.reply-count',card).textContent=`${replies.length} ${replies.length===1?'reactie':'reacties'}`;
  if(list.children[index]!==card){const focused=document.activeElement,selection=focused instanceof HTMLTextAreaElement||focused instanceof HTMLInputElement?[focused.selectionStart,focused.selectionEnd]:null;list.insertBefore(card,list.children[index]||null);if(focused&&card.contains(focused)){focused.focus({preventScroll:true});if(selection)focused.setSelectionRange(...selection);}}
  });
 }
-async function refresh(){if(fetching)return;fetching=true;try{state=await api('/api/insights');render();loaded=true;status($('#load-status'),'');}catch(error){status($('#load-status'),loaded?'Verversen lukt even niet. De getoonde bijdragen blijven staan; we proberen het automatisch opnieuw.':error.message,true);}finally{fetching=false;$('#answers').setAttribute('aria-busy','false');}}
+async function refresh(force=false){
+ if(fetching){await fetching;if(!force)return;}
+ const job=(async()=>{try{state=await api('/api/insights');render();loaded=true;status($('#load-status'),'');}catch(error){status($('#load-status'),loaded?'Verversen lukt even niet. De getoonde bijdragen blijven staan; we proberen het automatisch opnieuw.':error.message,true);}finally{$('#answers').setAttribute('aria-busy','false');}})();
+ fetching=job;try{await job;}finally{if(fetching===job)fetching=null;}
+}
 function wireForm(form,path,message,confirmation){
  let submitting=false,submission=null,previous=null;
  form.addEventListener('submit',async event=>{
@@ -61,7 +73,7 @@ function wireForm(form,path,message,confirmation){
  submitting=true;const button=$('button[type=submit]',form),original=button.innerHTML;button.disabled=true;button.textContent='Bezig met delen…';form.setAttribute('aria-busy','true');status(message,'Je bijdrage wordt opgeslagen…');
  // Lock fields briefly, so text typed during submission cannot be cleared unnoticed.
  const fields=[...form.querySelectorAll('input,textarea')];fields.forEach(x=>x.readOnly=true);
- try{await api(path,'POST',{name,body,submission});$('[name=body]',form).value='';remember(name);submission=null;previous=null;status(message,confirmation);await refresh();}catch(error){status(message,error.message,true);}finally{submitting=false;button.disabled=false;button.innerHTML=original;fields.forEach(x=>x.readOnly=false);form.setAttribute('aria-busy','false');}
+ try{await api(path,'POST',{name,body,submission});$('[name=body]',form).value='';remember(name);submission=null;previous=null;status(message,confirmation);await refresh(true);}catch(error){status(message,error.message,true);}finally{submitting=false;button.disabled=false;button.innerHTML=original;fields.forEach(x=>x.readOnly=false);form.setAttribute('aria-busy','false');}
  });
 }
 wireForm($('#insight'),'/api/insights',$('#submit-status'),'Bedankt! Je inzicht is gedeeld en zichtbaar voor collega’s.');

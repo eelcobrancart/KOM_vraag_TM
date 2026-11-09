@@ -5,7 +5,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const endpoint='https://ageaxnonkvrrnnvvsiyq.supabase.co/functions/v1/tm-kom-api';
 const target=resolve(root,'docs');
 await mkdir(target,{recursive:true});
-for(const file of ['index.html','style.css','app.js'])await copyFile(resolve(root,'public',file),resolve(target,file));
+for(const file of ['index.html','style.css','app.js','tm-logo.svg'])await copyFile(resolve(root,'public',file),resolve(target,file));
 let html=await readFile(resolve(target,'index.html'),'utf8');
 const csp=`default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://ageaxnonkvrrnnvvsiyq.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'self'`;
 html=html.replace('<meta name="viewport"',`<meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="viewport"`);

@@ -1,11 +1,17 @@
-# Minorkeuze semester 2: wat horen jullie?
+# TM Minorkeuze semester 2: wat horen jullie?
 
 Nederlandstalige webapp voor leercoaches Tourism Management bij Inholland.
 De publieke versie gebruikt **GitHub Pages + Supabase**. Iedereen met de link kan direct lezen, antwoorden, reageren en herkenningen geven of intrekken. Er zijn geen accounts nodig.
 
-## Website publiceren: nog één instelling
+## Versie 2
 
-De publicatiebestanden zijn voorbereid in `docs/`. De online API en gedeelde database zijn ingesteld en getest.
+De desktopweergave toont het formulier naast de bijdragen. De titel staat op één regel (op kleine schermen mag deze omslaan voor de leesbaarheid). Het aangeleverde I ♥ TM-ontwerp staat linksboven als schaalbaar SVG-logo.
+
+Per antwoord zijn er vier onafhankelijk aan- en uitzetbare icoontjes met gedeelde tellers: 👍 Dit herken ik, ✅ Mee eens, 😢 Jammer en 😊 Mooi. Bestaande herkenningen blijven behouden. Een browser kan per antwoord elk icoontje eenmaal selecteren. Sorteren op meest herkend gebruikt het aantal duimpjes. Tekstreacties blijven onder het antwoord staan.
+
+## Website publiceren / Pages-instelling
+
+De publicatiebestanden staan in `docs/`. De online API en gedeelde database zijn ingesteld en getest. Pages is al actief; onderstaande instellingen zijn ter referentie.
 
 1. Open https://github.com/eelcobrancart/KOM_vraag_TM/settings/pages
 2. Kies onder **Build and deployment → Source**: **Deploy from a branch**.
@@ -20,13 +26,14 @@ De URL hierboven is het verwachte adres; totdat Pages is ingeschakeld en de bouw
 
 ## Bestanden en wijzigingen
 
-- `public/`: bronbestanden van de interface.
+- `public/`: bronbestanden van de interface, inclusief het logo `tm-logo.svg`.
 - `scripts/build-pages.mjs`: maakt de zelfstandige Pages-versie met relatieve assetpaden en Content Security Policy.
 - `docs/`: gegenereerde Pages-bestanden; deze map staat in GitHub en wordt gepubliceerd.
 - `supabase/functions/tm-kom-api/index.ts`: publieke API met servervalidatie en beperkte schrijfbewerkingen.
 - `supabase/config.toml`: accountvrije toegang tot deze functie, zoals de app vereist.
-- `database/tm_kom_schema.sql`: bootstrap-schema dat online is toegepast als migratie `tm_kom_shared_storage`.
-- `server.mjs`, `migrations/001-init.sql`: optionele zelfstandige Node/SQLite-versie voor lokaal gebruik.
+- `database/tm_kom_schema.sql`: oorspronkelijke bootstrap, toegepast als `tm_kom_shared_storage`.
+- `database/tm_kom_reaction_options.sql`: aanvullende schemawijziging voor de icoontjes, toegepast als `tm_kom_reaction_options`. Pas voor een nieuwe omgeving beide SQL-bestanden in die volgorde toe.
+- `server.mjs`, `migrations/001-init.sql` en `migrations/002-emotions.sql`: optionele zelfstandige Node/SQLite-versie voor lokaal gebruik.
 
 Na wijzigen van de interface:
 
@@ -41,9 +48,9 @@ De Pages-configuratie bevat uitsluitend de publieke API-URL. **Er staan geen geh
 
 ## Gedeelde opslag en toegang
 
-De drie tabellen `tm_kom_insights`, `tm_kom_comments` en `tm_kom_recognitions` staan in Postgres. Row Level Security is ingeschakeld. Rechtstreekse tabeltoegang en de interne snapshotfunctie zijn ingetrokken voor `anon` en `authenticated`. De Edge Function biedt uitsluitend lezen, invoegen en toevoegen/intrekken van de eigen browserherkenning. Er bestaat geen bezoekers-API om bestaande antwoorden of reacties te wijzigen of verwijderen.
+De vier tabellen `tm_kom_insights`, `tm_kom_comments`, `tm_kom_recognitions` en `tm_kom_emotions` staan in Postgres. Row Level Security is ingeschakeld. Rechtstreekse tabeltoegang en de interne snapshotfunctie zijn ingetrokken voor `anon` en `authenticated`. De Edge Function biedt uitsluitend lezen, invoegen en toevoegen/intrekken van de eigen browserherkenning. Er bestaat geen bezoekers-API om bestaande antwoorden of reacties te wijzigen of verwijderen.
 
-De browser bewaart lokaal de naam en een willekeurige browsercode. De server slaat voor herkenningen uitsluitend een SHA-256-hash van die code op; hashes worden niet naar bezoekers teruggestuurd. De database dwingt één herkenning per browsercode en antwoord af. Cookie-/browsergegevens wissen of een andere browser gebruiken levert een nieuwe identiteit op. Dit is bewust geen verificatie per persoon.
+De browser bewaart lokaal de naam en een willekeurige browsercode. De server slaat voor herkenningen uitsluitend een SHA-256-hash van die code op; hashes worden niet naar bezoekers teruggestuurd. De database dwingt één selectie per icoontje, browsercode en antwoord af. Cookie-/browsergegevens wissen of een andere browser gebruiken levert een nieuwe identiteit op. Dit is bewust geen verificatie per persoon.
 
 Unieke verzendcodes voorkomen dubbele opslag bij opnieuw proberen. Invoer wordt op server en database gevalideerd en in de interface uitsluitend als tekst weergegeven. CORS accepteert de publieke oorsprong `https://eelcobrancart.github.io`; bij een eigen domein moet die configuratie worden aangepast en de functie opnieuw uitgerold. CORS is geen authenticatie: de API is bewust publiek en ook buiten een browser benaderbaar. Namen worden niet geverifieerd.
 
@@ -55,11 +62,11 @@ De Supabase security advisor geeft alleen een informatieve melding dat RLS aanst
 
 ## Uitgevoerde controles
 
-De online Supabase-API is getest met twee onafhankelijke browsercodes: antwoord plaatsen en in de andere sessie ophalen, reactie plaatsen, opnieuw verzenden zonder dubbele opslag, herkenning geven en intrekken, nieuwe verzoeken zonder gegevensverlies, afwijzen van lege tekst en verkeerde oorsprong, blokkering van wijzigen/verwijderen en CORS-preflight. **Geslaagd.** De eigen tijdelijke testbijdragen zijn na afloop verwijderd.
+De online Supabase-API is getest met twee onafhankelijke browsercodes: antwoord plaatsen en in de andere sessie ophalen, reactie plaatsen, opnieuw verzenden zonder dubbele opslag, herkenning geven en intrekken, nieuwe verzoeken zonder gegevensverlies, afwijzen van lege tekst en verkeerde oorsprong, blokkering van wijzigen/verwijderen en CORS-preflight. **Geslaagd.** De eigen tijdelijke testbijdragen zijn na afloop verwijderd. Voor versie 2 zijn alle vier icoontjes daarnaast getest op onafhankelijk selecteren, herhaald klikken zonder dubbele telling, gedeelde aantallen, intrekken zonder andere browsers te raken en behoud van de eerdere duimpjes.
 
 De zelfstandige Node-versie heeft daarnaast een integratietest met echte SQLite-opslag, twee HTTP-sessies en een volledige serverherstart: `npm test`. **Geslaagd.**
 
-**Verificatiegrens:** interactieve browser-, mobiele scherm- en toetsenbordtests zijn nog niet uitgevoerd doordat het browserbedieningstool in de bouwomgeving niet beschikbaar is. De Pages-website kan pas definitief worden gecontroleerd nadat de eigenaar bovenstaande Pages-instelling heeft opgeslagen.
+**Verificatiegrens:** interactieve browser-, mobiele scherm- en toetsenbordtests zijn nog niet uitgevoerd doordat het browserbedieningstool in de bouwomgeving niet beschikbaar is. Pages is inmiddels actief; de publicatie wordt aanvullend gecontroleerd door de gepubliceerde HTML, CSS en scripts op te halen.
 
 Handmatige acceptatie na publicatie:
 
