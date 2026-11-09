@@ -11,7 +11,7 @@ mkdirSync(dirname(dbPath),{recursive:true});
 const db=new DatabaseSync(dbPath);
 db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
 db.exec(readFileSync(resolve(root,'migrations/001-init.sql'),'utf8'));
-const files=new Map([['/',['index.html','text/html; charset=utf-8']],['/app.js',['app.js','text/javascript; charset=utf-8']],['/style.css',['style.css','text/css; charset=utf-8']]]);
+const files=new Map([['/',['index.html','text/html; charset=utf-8']],['/app.js',['app.js','text/javascript; charset=utf-8']],['/config.js',['config.js','text/javascript; charset=utf-8']],['/style.css',['style.css','text/css; charset=utf-8']]]);
 const rates=new Map();
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const field=(value,max,label)=>{if(typeof value!=='string'||!value.trim()||value.trim().length>max)throw fail(400,`${label} is verplicht en mag maximaal ${max} tekens bevatten.`);return value.trim();};

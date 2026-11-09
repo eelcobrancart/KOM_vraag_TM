@@ -1,0 +1,5 @@
+# This is intentionally a public, account-free conversation API.
+# Browser identity is an opaque random token, not a verified person.
+[functions.tm-kom-api]
+verify_jwt = false
+entrypoint = "./functions/tm-kom-api/index.ts"

@@ -1,4 +1,11 @@
 const $=(s,root=document)=>root.querySelector(s);
+const apiBase=window.TM_API_BASE||'';
+function browserToken(){
+ let token;try{token=localStorage.getItem('tm-browser-token');}catch{}
+ if(!/^[a-f0-9]{64}$/.test(token||'')){token=[...crypto.getRandomValues(new Uint8Array(32))].map(n=>n.toString(16).padStart(2,'0')).join('');try{localStorage.setItem('tm-browser-token',token);}catch{}}
+ return token;
+}
+const browserId=apiBase?browserToken():null;
 const store={get(){try{return localStorage.getItem('tm-name')||'';}catch{return '';}},set(v){try{localStorage.setItem('tm-name',v);}catch{}}};
 $('#name').value=store.get();
 let state={insights:[],comments:[]}, loaded=false, fetching=false;
@@ -8,7 +15,7 @@ const stamp=new Intl.DateTimeFormat('nl-NL',{dateStyle:'long',timeStyle:'short',
 function status(node,text,error=false){node.textContent=text;node.classList.toggle('error',error);}
 async function api(path,method='GET',data){
  const control=new AbortController(),timer=setTimeout(()=>control.abort(),15000);
- try{const response=await fetch(path,{method,credentials:'same-origin',headers:method==='GET'?{}:{'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined,signal:control.signal});let result;try{result=await response.json();}catch{throw new Error('De server is niet bereikbaar. Probeer het opnieuw.');}if(!response.ok)throw new Error(result.error||'Opslaan lukt niet. Probeer opnieuw.');return result;
+ try{const response=await fetch(apiBase+path,{method,credentials:apiBase?'omit':'same-origin',headers:{...(apiBase?{'x-tm-browser':browserId}:{}),...(method==='GET'?{}:{'Content-Type':'application/json'})},body:data?JSON.stringify(data):undefined,signal:control.signal});let result;try{result=await response.json();}catch{throw new Error('De server is niet bereikbaar. Probeer het opnieuw.');}if(!response.ok)throw new Error(result.error||'Opslaan lukt niet. Probeer opnieuw.');return result;
  }catch(error){if(error.name==='AbortError')throw new Error('De server reageert niet op tijd. Je tekst blijft staan. Probeer opnieuw.');if(error instanceof TypeError)throw new Error('Geen verbinding met de server. Je tekst blijft staan. Probeer opnieuw.');throw error;}finally{clearTimeout(timer);}
 }
 function author(root,item){$('.avatar',root).textContent=item.name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toLocaleUpperCase('nl');$('.author',root).textContent=item.name;const time=$('time',root);time.dateTime=item.created_at;time.textContent=stamp.format(new Date(item.created_at));}
