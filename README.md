@@ -3,11 +3,13 @@
 Nederlandstalige webapp voor leercoaches Tourism Management bij Inholland.
 De publieke versie gebruikt **GitHub Pages + Supabase**. Iedereen met de link kan direct lezen, antwoorden, reageren en herkenningen geven of intrekken. Er zijn geen accounts nodig.
 
-## Versie 2
+## Versie 3
 
-De desktopweergave toont het formulier naast de bijdragen. De titel staat op één regel (op kleine schermen mag deze omslaan voor de leesbaarheid). Het aangeleverde I ♥ TM-ontwerp staat linksboven als schaalbaar SVG-logo.
+Het logo, de kleinere titel en de taalwissel staan samen in de magenta balk. Via het vlaggetje wisselt de volledige interface tussen Nederlands en Engels, inclusief labels, statussen, tellers en datums. De taalkeuze blijft bewaard op het apparaat. Bijdragen blijven in de taal waarin ze zijn geschreven. Bij wisselen blijven ingetypte teksten staan.
 
-Per antwoord zijn er vier onafhankelijk aan- en uitzetbare icoontjes met gedeelde tellers: 👍 Dit herken ik, ✅ Mee eens, 😢 Jammer en 😊 Mooi. Bestaande herkenningen blijven behouden. Een browser kan per antwoord elk icoontje eenmaal selecteren. Sorteren op meest herkend gebruikt het aantal duimpjes. Tekstreacties blijven onder het antwoord staan.
+Vanaf 700 pixels schermbreedte staan het formulier en het bijdragenoverzicht in twee aparte kolommen. Op telefoons staan ze onder elkaar. De titel blijft op computer en tablet op één regel; op telefoons mag deze omslaan om leesbaar te blijven. ‘Reageer’ is een magenta knop met witte tekst. De asset-URL’s bevatten nu inhoudshashes zodat gewijzigde CSS en JavaScript opnieuw geladen worden.
+
+Per antwoord blijven vier onafhankelijk aan- en uitzetbare icoontjes met gedeelde tellers beschikbaar: 👍 Dit herken ik, ✅ Mee eens, 😢 Jammer en 😊 Mooi. De al opgeslagen bijdragen en herkenningen blijven behouden.
 
 ## Website publiceren / Pages-instelling
 
@@ -26,7 +28,7 @@ De URL hierboven is het verwachte adres; totdat Pages is ingeschakeld en de bouw
 
 ## Bestanden en wijzigingen
 
-- `public/`: bronbestanden van de interface, inclusief het logo `tm-logo.svg`.
+- `public/`: bronbestanden, het logo `tm-logo.svg` en de vertalingen in `i18n.js`.
 - `scripts/build-pages.mjs`: maakt de zelfstandige Pages-versie met relatieve assetpaden en Content Security Policy.
 - `docs/`: gegenereerde Pages-bestanden; deze map staat in GitHub en wordt gepubliceerd.
 - `supabase/functions/tm-kom-api/index.ts`: publieke API met servervalidatie en beperkte schrijfbewerkingen.
@@ -65,6 +67,8 @@ De Supabase security advisor geeft alleen een informatieve melding dat RLS aanst
 De online Supabase-API is getest met twee onafhankelijke browsercodes: antwoord plaatsen en in de andere sessie ophalen, reactie plaatsen, opnieuw verzenden zonder dubbele opslag, herkenning geven en intrekken, nieuwe verzoeken zonder gegevensverlies, afwijzen van lege tekst en verkeerde oorsprong, blokkering van wijzigen/verwijderen en CORS-preflight. **Geslaagd.** De eigen tijdelijke testbijdragen zijn na afloop verwijderd. Voor versie 2 zijn alle vier icoontjes daarnaast getest op onafhankelijk selecteren, herhaald klikken zonder dubbele telling, gedeelde aantallen, intrekken zonder andere browsers te raken en behoud van de eerdere duimpjes.
 
 De zelfstandige Node-versie heeft daarnaast een integratietest met echte SQLite-opslag, twee HTTP-sessies en een volledige serverherstart: `npm test`. **Geslaagd.**
+
+De taalwissel is aanvullend getest op vertalingen, vlag/knoplabel, onthouden van de voorkeur, behoud van de ingevulde naam, labels in reactietemplates en cachecodes voor alle Pages-assets.
 
 **Verificatiegrens:** interactieve browser-, mobiele scherm- en toetsenbordtests zijn nog niet uitgevoerd doordat het browserbedieningstool in de bouwomgeving niet beschikbaar is. Pages is inmiddels actief; de publicatie wordt aanvullend gecontroleerd door de gepubliceerde HTML, CSS en scripts op te halen.
 
