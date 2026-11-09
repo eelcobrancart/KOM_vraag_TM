@@ -33,7 +33,7 @@ async function rest(path: string, method = 'GET', body?: unknown, prefer?: strin
 Deno.serve(async (req: Request) => {
  const headers = {
   'Access-Control-Allow-Origin': allowedOrigin,
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'content-type, x-tm-browser',
   'Access-Control-Max-Age': '86400',
   'Content-Type': 'application/json; charset=utf-8',
@@ -52,7 +52,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'GET' && path === '/api/insights') {
    return send(200, await rest('rpc/tm_kom_snapshot', 'POST', { p_browser: browserHash }));
   }
-  if (!['POST','PUT'].includes(req.method)) throw fail(405, 'Deze bewerking is niet toegestaan.');
+  if (!['POST','PUT','DELETE'].includes(req.method)) throw fail(405, 'Deze bewerking is niet toegestaan.');
   if (!token) throw fail(400, 'Je browsercode ontbreekt. Herlaad de pagina.');
   if (!req.headers.get('Content-Type')?.startsWith('application/json')) throw fail(415, 'Gebruik een JSON-bericht.');
   const now = Date.now();
@@ -69,7 +69,15 @@ Deno.serve(async (req: Request) => {
   try { data = JSON.parse(new TextDecoder().decode(bytes)); } catch { throw fail(400, 'Het bericht kon niet worden gelezen. Probeer opnieuw.'); }
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw fail(400, 'Ongeldig bericht.');
   if (req.method === 'POST' && path === '/api/insights') {
-   await rest('tm_kom_insights?on_conflict=submission','POST', { submission: uuid(data.submission), name: field(data.name,80,'Je naam'), body: field(data.body,6000,'Je inzicht') },'resolution=ignore-duplicates,return=minimal');
+   await rest('tm_kom_insights?on_conflict=submission','POST', { submission: uuid(data.submission), owner_hash: browserHash, name: field(data.name,80,'Je naam'), body: field(data.body,6000,'Je inzicht') },'resolution=ignore-duplicates,return=minimal');
+   return send(200,{ok:true});
+  }
+  const deletion = path.match(/^\/api\/insights\/(\d+)$/);
+  if (req.method === 'DELETE' && deletion) {
+   const id = Number(deletion[1]);
+   if (!Number.isSafeInteger(id) || id < 1) throw fail(400, 'Ongeldige bijdrage.');
+   const deleted = await rest('rpc/tm_kom_delete_own','POST',{p_id:id,p_browser:browserHash});
+   if (!deleted) throw fail(403, 'Deze bijdrage is niet van deze browser of is al verwijderd.');
    return send(200,{ok:true});
   }
   const match = path.match(/^\/api\/insights\/(\d+)\/(comments|recognition|reactions)$/);

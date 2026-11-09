@@ -20,8 +20,8 @@ const stamp=()=>new Intl.DateTimeFormat(window.TM_I18N.language==='en'?'en-GB':'
 function status(node,key,error=false,values={}){node.dataset.messageKey=key;node.dataset.messageValues=JSON.stringify(values);node.textContent=key?t(key,values):'';node.classList.toggle('error',error);}
 async function api(path,method='GET',data){
  const control=new AbortController(),timer=setTimeout(()=>control.abort(),15000);
- try{const response=await fetch(apiBase+path,{method,credentials:apiBase?'omit':'same-origin',headers:{...(apiBase?{'x-tm-browser':browserId}:{}),...(method==='GET'?{}:{'Content-Type':'application/json'})},body:data?JSON.stringify(data):undefined,signal:control.signal});let result;try{result=await response.json();}catch{throw appError('serverError');}if(!response.ok)throw appError(({400:'inputError',403:'originError',404:'notFound',413:'tooLong',415:'invalidRequest',429:'tooMany'})[response.status]||'saveError');return result;
- }catch(error){if(error.name==='AbortError')throw appError('timeoutError');if(error instanceof TypeError)throw appError('networkError');throw error;}finally{clearTimeout(timer);}
+ try{const response=await fetch(apiBase+path,{method,credentials:apiBase?'omit':'same-origin',headers:{...(apiBase?{'x-tm-browser':browserId}:{}),...(method==='GET'?{}:{'Content-Type':'application/json'})},body:data?JSON.stringify(data):undefined,signal:control.signal});let result;try{result=await response.json();}catch{throw appError(method==='DELETE'?'deleteError':'serverError');}if(!response.ok)throw appError(method==='DELETE'?(response.status===403?'deleteNotAllowed':'deleteError'):(({400:'inputError',403:'originError',404:'notFound',413:'tooLong',415:'invalidRequest',429:'tooMany'})[response.status]||'saveError'));return result;
+ }catch(error){if(method==='DELETE'&&(error.name==='AbortError'||error instanceof TypeError))throw appError('deleteError');if(error.name==='AbortError')throw appError('timeoutError');if(error instanceof TypeError)throw appError('networkError');throw error;}finally{clearTimeout(timer);}
 }
 function author(root,item){$('.avatar',root).textContent=item.name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toLocaleUpperCase('nl');$('.author',root).textContent=item.name;const time=$('time',root);time.dateTime=item.created_at;time.textContent=stamp().format(new Date(item.created_at));}
 function createReply(reply){const node=document.createElement('div');node.className='reply';const row=document.createElement('div');row.className='author-row';const avatar=document.createElement('span');avatar.className='avatar';avatar.setAttribute('aria-hidden','true');const info=document.createElement('div'),name=document.createElement('h4'),time=document.createElement('time');name.className='author';info.append(name,time);row.append(avatar,info);const body=document.createElement('p');body.className='reply-body';body.textContent=reply.body;node.append(row,body);author(node,reply);return node;}
@@ -37,11 +37,22 @@ function makeCard(item){
  const current=state.insights.find(x=>x.id===item.id),active=!reaction(current,kind).active;
  try{await api(`/api/insights/${item.id}/reactions`,'PUT',{kind,active});status($('.recognize-status',card),active?'reactionAdded':'reactionRemoved',false,{kind});await refresh(true);}catch(error){status($('.recognize-status',card),error.key||'saveError',true);}finally{busyRecognitions.delete(key);button.disabled=false;}
  });
+ $('.delete-insight',card).addEventListener('click',async()=>{
+  const current=state.insights.find(x=>x.id===item.id),button=$('.delete-insight',card);
+  if(!current?.can_delete||button.disabled||!window.confirm(t('deleteConfirm')))return;
+  button.disabled=true;const label=$('[data-i18n]',button);label.dataset.i18n='deleting';label.textContent=t('deleting');
+  try{
+   await api(`/api/insights/${item.id}`,'DELETE',{});
+   state.insights=state.insights.filter(x=>x.id!==item.id);state.comments=state.comments.filter(x=>x.insight_id!==item.id);
+   render();status($('#submit-status'),'deleteSaved');$('#conversation-title').focus({preventScroll:true});await refresh(true);
+  }catch(error){status($('.delete-status',card),error.key||'deleteError',true);}finally{button.disabled=false;label.dataset.i18n='deleteOwn';label.textContent=t('deleteOwn');}
+ });
  wireForm(form,`/api/insights/${item.id}/comments`,$('.status',form),'replySaved');
  return card;
 }
 function render(){
  const list=$('#answers'),items=[...state.insights];
+ const present=new Set(items.map(x=>x.id));for(const [id,card] of cards)if(!present.has(id)){card.remove();cards.delete(id);}
  if($('#sort').value==='recognized')items.sort((a,b)=>b.recognitions-a.recognitions||b.id-a.id);
  $('#totals').textContent=`${countText(items.length,'answerOne','answerMany')} · ${countText(state.comments.length,'commentOne','commentMany')}`;
  if(!items.length){if(!$('.empty',list)){list.replaceChildren();const empty=document.createElement('div');empty.className='empty';const symbol=document.createElement('span');symbol.className='empty-symbol';symbol.textContent='↗';symbol.setAttribute('aria-hidden','true');const text=document.createElement('p');text.textContent=t('empty');empty.append(symbol,text);list.append(empty);}$('.empty p',list).textContent=t('empty');return;}
@@ -49,7 +60,7 @@ function render(){
  // Keep keyed cards and form nodes intact during polling, including focus and drafts.
  items.forEach((item,index)=>{
  let card=cards.get(item.id);if(!card){card=makeCard(item);cards.set(item.id,card);}
- author(card,item);$('.answer-body',card).textContent=item.body;
+ author(card,item);$('.answer-body',card).textContent=item.body;$('.owner-actions',card).hidden=!item.can_delete;
  for(const button of card.querySelectorAll('.emoji-reaction')){
   const kind=button.dataset.kind,value=reaction(item,kind);
   button.setAttribute('aria-pressed',String(Boolean(value.active)));

@@ -12,6 +12,7 @@ const db=new DatabaseSync(dbPath);
 db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
 db.exec(readFileSync(resolve(root,'migrations/001-init.sql'),'utf8'));
 db.exec(readFileSync(resolve(root,'migrations/002-emotions.sql'),'utf8'));
+if(!db.prepare("SELECT name FROM pragma_table_info('insights') WHERE name='owner_hash'").get())db.exec(readFileSync(resolve(root,'migrations/003-ownership.sql'),'utf8'));
 const files=new Map([['/i18n.js',['i18n.js','text/javascript; charset=utf-8']],['/tm-logo.svg',['tm-logo.svg','image/svg+xml']],['/',['index.html','text/html; charset=utf-8']],['/app.js',['app.js','text/javascript; charset=utf-8']],['/config.js',['config.js','text/javascript; charset=utf-8']],['/style.css',['style.css','text/css; charset=utf-8']]]);
 const rates=new Map();
 const fail=(status,message)=>Object.assign(new Error(message),{status});
@@ -31,7 +32,7 @@ export const server=http.createServer(async(req,res)=>{
  if(!browser){browser=randomBytes(32).toString('hex');res.setHeader('Set-Cookie',`tm_browser=${browser}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${process.env.COOKIE_SECURE==='true'?'; Secure':''}`);}
  const browserHash=createHash('sha256').update(browser).digest('hex');
  if(req.method==='GET'&&url.pathname==='/api/insights'){
- let insights=db.prepare(`SELECT i.*, (SELECT count(*) FROM recognitions r WHERE r.insight_id=i.id) AS recognitions, EXISTS(SELECT 1 FROM recognitions r WHERE r.insight_id=i.id AND r.browser=?) AS recognized FROM insights i ORDER BY i.created_at DESC,i.id DESC`).all(browserHash).map(({submission,...row})=>row);
+ let insights=db.prepare(`SELECT i.*, coalesce(i.owner_hash=?,0) AS can_delete, (SELECT count(*) FROM recognitions r WHERE r.insight_id=i.id) AS recognitions, EXISTS(SELECT 1 FROM recognitions r WHERE r.insight_id=i.id AND r.browser=?) AS recognized FROM insights i ORDER BY i.created_at DESC,i.id DESC`).all(browserHash,browserHash).map(({submission,owner_hash,...row})=>row);
  const emotionRows=db.prepare('SELECT insight_id,kind,count(*) AS count,max(CASE WHEN browser=? THEN 1 ELSE 0 END) AS active FROM emotions GROUP BY insight_id,kind').all(browserHash);
  insights=insights.map(item=>({...item,reactions:Object.fromEntries(['recognize','checked','sad','happy'].map(kind=>{
   const row=emotionRows.find(x=>x.insight_id===item.id&&x.kind===kind);
@@ -40,7 +41,7 @@ export const server=http.createServer(async(req,res)=>{
  const comments=db.prepare('SELECT id,insight_id,name,body,created_at FROM comments ORDER BY created_at,id').all();
  return send(res,200,{insights,comments});
  }
- if(!['POST','PUT'].includes(req.method))throw fail(405,'Deze bewerking is niet toegestaan.');
+ if(!['POST','PUT','DELETE'].includes(req.method))throw fail(405,'Deze bewerking is niet toegestaan.');
  if(req.headers['sec-fetch-site']==='cross-site')throw fail(403,'Open de app rechtstreeks om een bijdrage te plaatsen.');
  if(req.headers.origin){const expected=process.env.APP_ORIGIN || `http://${req.headers.host}`;if(req.headers.origin!==expected)throw fail(403,'Deze herkomst is niet toegestaan.');}
  if(!req.headers['content-type']?.startsWith('application/json'))throw fail(415,'Gebruik een JSON-bericht.');
@@ -50,8 +51,21 @@ export const server=http.createServer(async(req,res)=>{
  if(!data||typeof data!=='object'||Array.isArray(data))throw fail(400,'Het bericht moet een geldig object bevatten.');
  if(req.method==='POST'&&url.pathname==='/api/insights'){
  const name=field(data.name,80,'Je naam'),body=field(data.body,6000,'Je inzicht'),submission=uuid(data.submission);
- db.prepare('INSERT INTO insights(submission,name,body) VALUES(?,?,?) ON CONFLICT(submission) DO NOTHING').run(submission,name,body);
+ db.prepare('INSERT INTO insights(submission,name,body,owner_hash) VALUES(?,?,?,?) ON CONFLICT(submission) DO NOTHING').run(submission,name,body,browserHash);
  return send(res,200,{ok:true});
+ }
+ const deletion=url.pathname.match(/^\/api\/insights\/(\d+)$/);
+ if(req.method==='DELETE'&&deletion){
+  const parent=id(deletion[1]);db.exec('BEGIN IMMEDIATE');
+  try{
+   if(!db.prepare('SELECT id FROM insights WHERE id=? AND owner_hash=?').get(parent,browserHash))throw fail(403,'Deze bijdrage is niet van deze browser of is al verwijderd.');
+   db.prepare('DELETE FROM comments WHERE insight_id=?').run(parent);
+   db.prepare('DELETE FROM emotions WHERE insight_id=?').run(parent);
+   db.prepare('DELETE FROM recognitions WHERE insight_id=?').run(parent);
+   db.prepare('DELETE FROM insights WHERE id=? AND owner_hash=?').run(parent,browserHash);
+   db.exec('COMMIT');
+  }catch(error){db.exec('ROLLBACK');throw error;}
+  return send(res,200,{ok:true});
  }
  const match=url.pathname.match(/^\/api\/insights\/(\d+)\/(comments|recognition|reactions)$/);
  if(!match)throw fail(404,'Deze bewerking bestaat niet.');

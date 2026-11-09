@@ -11,6 +11,14 @@ Vanaf 700 pixels schermbreedte staan het formulier en het bijdragenoverzicht in 
 
 Per antwoord blijven vier onafhankelijk aan- en uitzetbare icoontjes met gedeelde tellers beschikbaar: 👍 Dit herken ik, ✅ Mee eens, 😢 Jammer en 😊 Mooi. De al opgeslagen bijdragen en herkenningen blijven behouden.
 
+## Eigen bijdrage verwijderen
+
+Bij nieuw geplaatste inzichten verschijnt **Verwijder mijn bijdrage** uitsluitend in de browser waarmee het inzicht is geplaatst. De server bewaart daarvoor een SHA-256-hash van de bestaande willekeurige browsercode; de hash wordt niet naar bezoekers teruggestuurd. Het tonen van de knop is geen beveiligingsgrens: de server controleert het eigenaarschap opnieuw voor iedere verwijdering.
+
+Na bevestiging worden het inzicht, alle bijbehorende tekstreacties en alle icoonreacties in één databasetransactie verwijderd. Een andere browser kan dit niet doen door dezelfde naam of verzendcode te gebruiken. De knop en bevestiging zijn beschikbaar in Nederlands en Engels. Andere bezoekers zien de verwijdering bij de volgende verversing.
+
+Voor bijdragen van vóór deze wijziging is geen eigenaar vastgelegd. Deze kunnen daarom alleen via beheer worden verwijderd. Wissen van browsergegevens, een privévenster of een andere browser levert een andere browsercode op en geeft geen toegang tot eerdere eigen bijdragen. De app biedt geen account of herstelmogelijkheid voor die code.
+
 ## Website publiceren / Pages-instelling
 
 De publicatiebestanden staan in `docs/`. De online API en gedeelde database zijn ingesteld en getest. Pages is al actief; onderstaande instellingen zijn ter referentie.
@@ -34,8 +42,9 @@ De URL hierboven is het verwachte adres; totdat Pages is ingeschakeld en de bouw
 - `supabase/functions/tm-kom-api/index.ts`: publieke API met servervalidatie en beperkte schrijfbewerkingen.
 - `supabase/config.toml`: accountvrije toegang tot deze functie, zoals de app vereist.
 - `database/tm_kom_schema.sql`: oorspronkelijke bootstrap, toegepast als `tm_kom_shared_storage`.
-- `database/tm_kom_reaction_options.sql`: aanvullende schemawijziging voor de icoontjes, toegepast als `tm_kom_reaction_options`. Pas voor een nieuwe omgeving beide SQL-bestanden in die volgorde toe.
-- `server.mjs`, `migrations/001-init.sql` en `migrations/002-emotions.sql`: optionele zelfstandige Node/SQLite-versie voor lokaal gebruik.
+- `database/tm_kom_reaction_options.sql`: aanvullende schemawijziging voor de icoontjes, toegepast als `tm_kom_reaction_options`.
+- `database/tm_kom_ownership.sql`: aanvullende eigenaarschapskolom en beperkte, atomaire verwijderfunctie, toegepast als `tm_kom_ownership`. Pas voor een nieuwe omgeving deze drie SQL-bestanden in de genoemde volgorde toe.
+- `server.mjs`, `migrations/001-init.sql` en `migrations/002-emotions.sql`, `migrations/003-ownership.sql`: optionele zelfstandige Node/SQLite-versie voor lokaal gebruik.
 
 Na wijzigen van de interface:
 
@@ -50,9 +59,9 @@ De Pages-configuratie bevat uitsluitend de publieke API-URL. **Er staan geen geh
 
 ## Gedeelde opslag en toegang
 
-De vier tabellen `tm_kom_insights`, `tm_kom_comments`, `tm_kom_recognitions` en `tm_kom_emotions` staan in Postgres. Row Level Security is ingeschakeld. Rechtstreekse tabeltoegang en de interne snapshotfunctie zijn ingetrokken voor `anon` en `authenticated`. De Edge Function biedt uitsluitend lezen, invoegen en toevoegen/intrekken van de eigen browserherkenning. Er bestaat geen bezoekers-API om bestaande antwoorden of reacties te wijzigen of verwijderen.
+De vier tabellen `tm_kom_insights`, `tm_kom_comments`, `tm_kom_recognitions` en `tm_kom_emotions` staan in Postgres. Row Level Security is ingeschakeld. Rechtstreekse tabeltoegang en de interne snapshotfunctie zijn ingetrokken voor `anon` en `authenticated`. De Edge Function biedt uitsluitend lezen, invoegen en toevoegen/intrekken van de eigen browserherkenning. Bezoekers kunnen bestaande tekst niet wijzigen. Alleen de eigenaar van een nieuw inzicht kan via de beperkte verwijder-API zijn eigen inzicht en de onderliggende thread verwijderen; de server controleert de browsercode.
 
-De browser bewaart lokaal de naam en een willekeurige browsercode. De server slaat voor herkenningen uitsluitend een SHA-256-hash van die code op; hashes worden niet naar bezoekers teruggestuurd. De database dwingt één selectie per icoontje, browsercode en antwoord af. Cookie-/browsergegevens wissen of een andere browser gebruiken levert een nieuwe identiteit op. Dit is bewust geen verificatie per persoon.
+De browser bewaart lokaal de naam en een willekeurige browsercode. De server slaat voor eigenaarschap en herkenningen uitsluitend een SHA-256-hash van die code op; hashes worden niet naar bezoekers teruggestuurd. De database dwingt één selectie per icoontje, browsercode en antwoord af. Cookie-/browsergegevens wissen of een andere browser gebruiken levert een nieuwe identiteit op. Dit is bewust geen verificatie per persoon.
 
 Unieke verzendcodes voorkomen dubbele opslag bij opnieuw proberen. Invoer wordt op server en database gevalideerd en in de interface uitsluitend als tekst weergegeven. CORS accepteert de publieke oorsprong `https://eelcobrancart.github.io`; bij een eigen domein moet die configuratie worden aangepast en de functie opnieuw uitgerold. CORS is geen authenticatie: de API is bewust publiek en ook buiten een browser benaderbaar. Namen worden niet geverifieerd.
 
@@ -64,9 +73,11 @@ De Supabase security advisor geeft alleen een informatieve melding dat RLS aanst
 
 ## Uitgevoerde controles
 
-De online Supabase-API is getest met twee onafhankelijke browsercodes: antwoord plaatsen en in de andere sessie ophalen, reactie plaatsen, opnieuw verzenden zonder dubbele opslag, herkenning geven en intrekken, nieuwe verzoeken zonder gegevensverlies, afwijzen van lege tekst en verkeerde oorsprong, blokkering van wijzigen/verwijderen en CORS-preflight. **Geslaagd.** De eigen tijdelijke testbijdragen zijn na afloop verwijderd. Voor versie 2 zijn alle vier icoontjes daarnaast getest op onafhankelijk selecteren, herhaald klikken zonder dubbele telling, gedeelde aantallen, intrekken zonder andere browsers te raken en behoud van de eerdere duimpjes.
+De online Supabase-API is getest met twee onafhankelijke browsercodes: antwoord plaatsen en in de andere sessie ophalen, reactie plaatsen, opnieuw verzenden zonder dubbele opslag, herkenning geven en intrekken, nieuwe verzoeken zonder gegevensverlies, afwijzen van lege tekst en verkeerde oorsprong, blokkering van wijzigen en verwijderen door een andere browser en CORS-preflight. **Geslaagd.** De eigen tijdelijke testbijdragen zijn na afloop verwijderd. Voor versie 2 zijn alle vier icoontjes daarnaast getest op onafhankelijk selecteren, herhaald klikken zonder dubbele telling, gedeelde aantallen, intrekken zonder andere browsers te raken en behoud van de eerdere duimpjes.
 
 De zelfstandige Node-versie heeft daarnaast een integratietest met echte SQLite-opslag, twee HTTP-sessies en een volledige serverherstart: `npm test`. **Geslaagd.**
+
+Het verwijderen van een eigen inzicht is online met twee onafhankelijke browsersessies getest: de eigenaar mag verwijderen, een andere browser niet, ook niet met dezelfde naam of een herhaalde verzendcode. Reacties en herkenningen verdwijnen mee, andere bijdragen blijven staan en de eigenaarshash is afgeschermd. Lokaal zijn daarnaast oude bijdragen zonder eigenaar en het behoud van verwijdering na een serverherstart getest.
 
 De taalwissel is aanvullend getest op vertalingen, vlag/knoplabel, onthouden van de voorkeur, behoud van de ingevulde naam, labels in reactietemplates en cachecodes voor alle Pages-assets.
 
@@ -102,4 +113,4 @@ Docker: `docker compose up --build -d`. Het volume `tm-data` bewaart de lokale S
 
 ## Beheer
 
-Bewaar bijdragen nooit in GitHub. Voor back-ups, gegevenscorrecties en verwijdering gebruikt de beheerder het Supabase-dashboard of gecontroleerde databasebeheeracties. De bezoekersinterface biedt bewust geen beheerfuncties. Controleer in Supabase welke back-upmogelijkheden en gebruikslimieten bij je bestaande abonnement horen. Deel geen namen of herkenbare gegevens van studenten.
+Bewaar bijdragen nooit in GitHub. Voor back-ups, gegevenscorrecties en verwijdering gebruikt de beheerder het Supabase-dashboard of gecontroleerde databasebeheeracties. De bezoekersinterface biedt alleen verwijderen van een eigen nieuw inzicht, met bevestiging; bredere beheerfuncties blijven op de server. Controleer in Supabase welke back-upmogelijkheden en gebruikslimieten bij je bestaande abonnement horen. Deel geen namen of herkenbare gegevens van studenten.

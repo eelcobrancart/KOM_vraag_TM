@@ -1,6 +1,7 @@
 (() => {
  const messages = {
   nl: {
+   deleteOwn:'Verwijder mijn bijdrage', deleting:'Verwijderen…', deleteConfirm:'Wil je jouw bijdrage verwijderen? Alle tekstreacties en herkenningen bij deze bijdrage worden ook verwijderd. Dit kan niet ongedaan worden gemaakt.', deleteSaved:'Je bijdrage en de bijbehorende reacties zijn verwijderd.', deleteNotAllowed:'Deze bijdrage is niet van deze browser of is al verwijderd.', deleteError:'Verwijderen kon niet worden bevestigd. Ververs de pagina en probeer zo nodig opnieuw.',
    pageTitle:'TM Minorkeuze semester 2: wat horen jullie?', titleLead:'TM Minorkeuze semester 2:', titleQuestion:'wat horen jullie?',
    description:'Deel als leercoach je inzichten over de minorkeuze van TM-studenten.', skip:'Naar het formulier',
    intro:'Meer TM-studenten hebben voor semester 2 gekozen voor een minor buiten Inholland via Kies op Maat. Als leercoach hoor je wat studenten bezighoudt. Deel jouw inzichten, lees de ervaringen van collega’s en vul elkaar aan. Zo krijgen we samen beter zicht op de redenen achter deze keuzes.',
@@ -19,6 +20,7 @@
    inputError:'Controleer je naam en tekst. Lege bijdragen zijn niet toegestaan.', originError:'Deze herkomst is niet toegestaan. Open de gedeelde website.', notFound:'Dit inzicht is niet gevonden.', tooLong:'Je bericht is te lang. Kort het in en probeer opnieuw.', invalidRequest:'Het bericht kon niet worden gelezen. Probeer opnieuw.', tooMany:'Je verstuurt veel berichten. Wacht een minuut en probeer opnieuw.'
   },
   en: {
+   deleteOwn:'Delete my contribution', deleting:'Deleting…', deleteConfirm:'Delete your contribution? All comments and reactions attached to it will also be deleted. This cannot be undone.', deleteSaved:'Your contribution and its comments and reactions have been deleted.', deleteNotAllowed:'This contribution does not belong to this browser or has already been deleted.', deleteError:'Deletion could not be confirmed. Refresh the page and try again if needed.',
    pageTitle:'TM Minor choices, semester 2: what are you hearing?', titleLead:'TM Minor choices, semester 2:', titleQuestion:'what are you hearing?',
    description:'Share your insights as a learning coach on TM students’ minor choices.', skip:'Skip to the form',
    intro:'More TM students have chosen a minor outside Inholland through Kies op Maat for semester 2. As a learning coach, you hear what matters to students. Share your insights, read your colleagues’ experiences and build on each other’s observations. Together, we can better understand the reasons behind these choices.',

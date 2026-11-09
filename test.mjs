@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {once} from 'node:events';
+import {DatabaseSync} from 'node:sqlite';
 
 test('gedeelde route, validatie, toegangsregels en persistentie na serverherstart',async()=>{
  const data=await mkdtemp(join(tmpdir(),'tm-test-'));
@@ -23,7 +24,7 @@ test('gedeelde route, validatie, toegangsregels en persistentie na serverherstar
  await call('/api/insights',{who:'B'});assert.notEqual(cookieA,cookieB);
  const insight={name:'Leercoach A',body:'Een student zegt: een breder aanbod spreekt mij aan. <script>alert(1)</script>',submission:randomUUID()};
  await Promise.all([call('/api/insights',{method:'POST',data:insight}),call('/api/insights',{method:'POST',data:insight})]);
- let shared=(await call('/api/insights',{who:'B'})).data;assert.equal(shared.insights.length,1);assert.equal(shared.insights[0].body,insight.body);assert.equal(shared.insights[0].submission,undefined);
+ let shared=(await call('/api/insights',{who:'B'})).data;assert.equal(shared.insights.length,1);assert.equal(shared.insights[0].body,insight.body);assert.equal(shared.insights[0].submission,undefined);assert.equal(shared.insights[0].owner_hash,undefined);assert.equal(shared.insights[0].can_delete,0);assert.equal((await call('/api/insights')).data.insights[0].can_delete,1);
  const id=shared.insights[0].id;
  const comment={name:'Leercoach B',body:'Dit hoor ik ook tijdens de coaching.',submission:randomUUID()};
  assert.equal((await call(`/api/insights/${id}/comments`,{who:'B',method:'POST',data:comment})).status,200);
@@ -36,7 +37,7 @@ test('gedeelde route, validatie, toegangsregels en persistentie na serverherstar
  assert.equal((await call('/api/insights',{method:'POST',data:{...insight,body:'  ',submission:randomUUID()}})).status,400);
  assert.equal((await call('/api/insights',{method:'POST',data:{...insight,name:'x'.repeat(81),submission:randomUUID()}})).status,400);
  assert.equal((await call('/api/insights',{method:'POST',data:insight,headers:{Origin:'https://wrong.example'}})).status,403);
- assert.equal((await call(`/api/insights/${id}`,{method:'DELETE'})).status,405);
+ assert.equal((await call(`/api/insights/${id}`,{who:'B',method:'DELETE',data:{name:insight.name,owner_hash:'forged'}})).status,403);
  assert.equal((await call(`/api/insights/${id}`,{method:'PUT',data:{body:'gewijzigd'}})).status,404);
  assert.equal((await call('/api/insights/999999/comments',{method:'POST',data:comment})).status,404);
  // Each emoji is independently idempotent, browser-scoped, and retractable.
@@ -57,5 +58,20 @@ test('gedeelde route, validatie, toegangsregels en persistentie na serverherstar
  const page=await fetch(origin);assert.match(page.headers.get('content-security-policy'),/script-src 'self'/);assert.match(await page.text(),/lang="nl"/);
  await stop();origin=await start();shared=(await call('/api/insights')).data;
  assert.equal(shared.insights.length,1);assert.equal(shared.comments.length,1);assert.equal(shared.insights[0].recognitions,1);assert.equal(shared.insights[0].recognized,1);assert.equal(shared.insights[0].reactions.happy.count,1);assert.equal(shared.insights[0].reactions.sad.count,0);
+ // A replay of the original submission cannot transfer ownership to B.
+ await call('/api/insights',{who:'B',method:'POST',data:insight});
+ assert.equal((await call('/api/insights',{who:'B'})).data.insights[0].can_delete,0);
+ const other={name:'Leercoach B',body:'Deze andere bijdrage moet blijven staan.',submission:randomUUID()};
+ await call('/api/insights',{who:'B',method:'POST',data:other});
+ const fixtureDb=new DatabaseSync(join(data,'tm.sqlite'));
+ const legacy=Number(fixtureDb.prepare('INSERT INTO insights(submission,name,body) VALUES(?,?,?)').run(randomUUID(),'Legacy','Bijdrage van vóór de eigenaarschapsfunctie.').lastInsertRowid);
+ assert.equal((await call(`/api/insights/${legacy}`,{method:'DELETE',data:{}})).status,403);
+ assert.equal((await call(`/api/insights/${id}`,{method:'DELETE',data:{}})).status,200);
+ const afterDelete=(await call('/api/insights',{who:'B'})).data;
+ assert.equal(afterDelete.insights.some(x=>x.id===id),false);assert.equal(afterDelete.comments.some(x=>x.insight_id===id),false);
+ assert.equal(afterDelete.insights.length,2);assert.ok(afterDelete.insights.some(x=>x.body===other.body));
+ for(const table of ['comments','emotions','recognitions'])assert.equal(fixtureDb.prepare(`SELECT count(*) AS n FROM ${table} WHERE insight_id=?`).get(id).n,0);
+ fixtureDb.close();
+ await stop();origin=await start();assert.equal((await call('/api/insights')).data.insights.some(x=>x.id===id),false);
  }finally{if(child?.exitCode===null)await stop();await rm(data,{recursive:true,force:true});}
 });
