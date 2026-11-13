@@ -19,6 +19,9 @@ test('gedeelde route, validatie, toegangsregels en persistentie na serverherstar
  async function stop(){const closed=once(child,'exit');child.kill('SIGTERM');await closed;}
  try{
  let origin=await start();let cookieA='',cookieB='';
+ const health=await fetch(origin+'/api/health');
+ assert.equal(health.status,200);assert.deepEqual(await health.json(),{ok:true});assert.equal(health.headers.get('set-cookie'),null);assert.equal(health.headers.get('cache-control'),'no-store');
+
  async function call(path,{who='A',method='GET',data:payload,headers={}}={}){const response=await fetch(origin+path,{method,headers:{Cookie:who==='A'?cookieA:cookieB,...(payload?{'Content-Type':'application/json'}:{}),...headers},body:payload?JSON.stringify(payload):undefined});const cookie=response.headers.get('set-cookie');if(cookie){if(who==='A')cookieA=cookie.split(';')[0];else cookieB=cookie.split(';')[0];}return {status:response.status,data:await response.json()};}
  assert.deepEqual((await call('/api/insights')).data,{insights:[],comments:[]});
  await call('/api/insights',{who:'B'});assert.notEqual(cookieA,cookieB);

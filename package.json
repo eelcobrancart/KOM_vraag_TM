@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test test.mjs i18n.test.mjs",
+    "test": "node --test test.mjs i18n.test.mjs health.test.mjs",
     "build:pages": "node scripts/build-pages.mjs"
   }
 }

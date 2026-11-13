@@ -27,6 +27,10 @@ export const server=http.createServer(async(req,res)=>{
  try{
  const url=new URL(req.url,'http://localhost');
  if(req.method==='GET'&&files.has(url.pathname)){const [file,type]=files.get(url.pathname);res.writeHead(200,{'Content-Type':type});return res.end(readFileSync(resolve(root,'public',file)));}
+ if(req.method==='GET'&&url.pathname==='/api/health'){
+  db.prepare('SELECT id FROM insights LIMIT 1').get();
+  return send(res,200,{ok:true});
+ }
  if(!url.pathname.startsWith('/api/'))throw fail(404,'Deze pagina bestaat niet.');
  let browser=req.headers.cookie?.match(/(?:^|;\s*)tm_browser=([a-f0-9]{64})(?:;|$)/)?.[1];
  if(!browser){browser=randomBytes(32).toString('hex');res.setHeader('Set-Cookie',`tm_browser=${browser}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${process.env.COOKIE_SECURE==='true'?'; Secure':''}`);}

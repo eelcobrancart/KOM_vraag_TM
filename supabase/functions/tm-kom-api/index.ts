@@ -46,6 +46,11 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
   const url = new URL(req.url);
   const path = url.pathname.replace(/^.*\/tm-kom-api/, '');
+  // A real, minimal database read. No rows, names, counts or tokens leave this endpoint.
+  if (req.method === 'GET' && path === '/api/health') {
+   await rest('tm_kom_insights?select=id&limit=1');
+   return send(200,{ok:true});
+  }
   const token = req.headers.get('x-tm-browser') || '';
   if (token && !/^[0-9a-f]{64}$/.test(token)) throw fail(400, 'Ongeldige browsercode. Herlaad de pagina.');
   const browserHash = token ? [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)))].map(n => n.toString(16).padStart(2, '0')).join('') : '';

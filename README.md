@@ -19,6 +19,22 @@ Na bevestiging worden het inzicht, alle bijbehorende tekstreacties en alle icoon
 
 Voor bijdragen van vóór deze wijziging is geen eigenaar vastgelegd. Deze kunnen daarom alleen via beheer worden verwijderd. Wissen van browsergegevens, een privévenster of een andere browser levert een andere browsercode op en geeft geen toegang tot eerdere eigen bijdragen. De app biedt geen account of herstelmogelijkheid voor die code.
 
+## Automatische databasecontrole
+
+De automatische taak **TM-databasecontrole** staat ingeschakeld voor dagelijks 08:00 en 20:00, tijdzone Europe/Amsterdam. De planning loopt via de ingebouwde automatische taken, onafhankelijk van de repositoryactiviteit op GitHub. Er is geen account bij cron-job.org gebruikt.
+
+Elke controle roept deze URL aan met een unieke queryparameter:
+
+```text
+https://ageaxnonkvrrnnvvsiyq.supabase.co/functions/v1/tm-kom-api/api/health
+```
+
+Deze route voert via de server één echte databaseleesopdracht uit op `tm_kom_insights` (`select=id&limit=1`). De response bevat uitsluitend `{"ok":true}` als de database bereikbaar is. Er worden geen bijdragen of reacties aangemaakt of gewijzigd, geen persoonsgegevens teruggestuurd en geen browsercodes aangemaakt. De response wordt niet gecachet. Databasefouten geven een HTTP-foutstatus in plaats van een onterechte succesmelding.
+
+De taak probeert bij een fout eenmaal opnieuw en meldt alleen blijvende fouten aan de beheerder. Bij geslaagde controles volgt geen melding. De website voor bezoekers blijft hetzelfde. De eerste rechtstreekse online controle is geslaagd; toekomstige geplande uitvoeringen moeten nog plaatsvinden. Beheer of pauzeer de planning via de automatische taak ‘TM-databasecontrole’.
+
+Dit ondersteunt dagelijkse activiteit op het gratis Supabase-abonnement. Het is geen beschikbaarheidsgarantie of back-up: automatische taken kunnen mislukken of worden uitgeschakeld. Een betaald Supabase-abonnement is de route om automatisch pauzeren wegens inactiviteit uit te sluiten. Zie https://supabase.com/docs/guides/platform/free-project-pausing
+
 ## Website publiceren / Pages-instelling
 
 De publicatiebestanden staan in `docs/`. De online API en gedeelde database zijn ingesteld en getest. Pages is al actief; onderstaande instellingen zijn ter referentie.
